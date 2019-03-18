@@ -43,11 +43,11 @@ Go ahead and create a repo on github called `idea-board`. Make sure to include t
 After creating the repo, go ahead and clone it locally into your class-exercises folder.
 
 ## Express Set Up
-We're going to be building a lean Express app that will focus mainly on retrieving and serving API information. To start, we are only going to install `express`, `dotenv`, `body-parser`, and `mongoose`
+We're going to be building a lean Express app that will focus mainly on retrieving and serving API information. To start, we are only going to install `express`, `dotenv`, and `mongoose`
 
 ```
 npm init -y
-npm install express dotenv body-parser mongoose
+npm install express dotenv mongoose
 touch server.js
 ```
 
@@ -55,24 +55,10 @@ touch server.js
 In our `server.js` file, we are going to create the most basic server possible.  As our needs grow, we will refactor and build onto the file.
 
 ```js
-require("dotenv").config();
 const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
 const app = express();
-mongoose.connect(process.env.MONGODB_URI); //mongodb://localhost/idea-board
 
-const connection = mongoose.connection;
-connection.on('connected', () => {
-  console.log('Mongoose Connected Successfully')
-})
-
-// If the connection throws an error
-connection.on('error', (err) => {
-  console.log('Mongoose default connection error: ' + err);
-}) 
-
-app.use(bodyParser.json());
+app.use(express.json());
 app.get('/', (req,res) => {
   res.send('Hello world!')
 })
@@ -87,10 +73,45 @@ Let's start our app and test that it is working.
 
 > COMMIT!
 
+## Connecting Mongoose
+Create a `.env` file at the root level of the project
+
+```
+// In .env
+MONGODB_URI=mongodb://localhost/idea-board
+```
+
+Now create a new directory called `db` and create a `connection.js` file within the new `db` directory.
+
+Set up the mongoose connection in `connection.js`
+
+```javascript
+// In db/connection.js
+require('dotenv').config()
+const mongoose = require('mongoose')
+
+if(process.env.MONGODB_URI) {
+    mongoose.connect(process.env.MONGODB_URI)
+} else {
+    mongoose.connect('mongodb://localhost/idea-board')
+}
+
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error: ', err)
+    process.exit(-1)
+})
+
+mongoose.connection.once('open', () => {
+    console.log("Mongoose has connected to MongoDB")
+})
+
+module.exports = mongoose
+```
+
 ## Integrating create-react-app
 Before we start working building out our models and controllers, let's first connect our Express app to React. Use `create-react-app` to get our UI up and running.
 ```bash
-# Inside of Idea-Board
+# Inside of idea-board
 create-react-app client
 ```
 
@@ -103,12 +124,15 @@ Your folder structure should now look something like this.
   |- package.json
   |- ...
 |- node_modules
+|- .env
+|- db
+  |- connection.js
 |- server.js
 |- package.json
 ...
 ```
 
-This will create a new React application for us to begin building our game.  Let's try to start our application.
+This will create a new React application for us to begin building our idea board UI. Let's try to start our application.
 
 **OH NO**
 You may have gotten an error that looks something like this:
@@ -129,10 +153,10 @@ In order to run both our server and app at the same time, we are going to use an
 
 ```bash
 # Inside idea-board directory
-npm install concurrently --save
+npm i concurrently
 ```
 ```json
-//Inside package.json
+// Inside package.json
 ...
 "scripts": {
   "start": "node server.js",
@@ -173,12 +197,12 @@ Let's update the `package.json` to help Heroku understand more about our app.  W
 
 ```js
 ...
-  //Set the Heroku version of Node to the most recent available.
+  // Set the Heroku version of Node to the most recent available.
   "engines": {
-    "node": "9.7.0"
+    "node": "10.0.0"
   },
 ...
-//Postinstall will install the client packages and build the minified UI in Heroku.
+// postinstall will install the client packages and build the minified UI in Heroku.
 
   "scripts": {
     "start": "node server.js",
@@ -255,9 +279,9 @@ Now that we have data within our database, let's use Express to retrieve that in
 
 ```js
 // ./server.js
-  app.use('/api/users', UsersController)
+  app.use('/api/users', userController)
 
-// ./controllers/users
+// ./controllers/userController.js
 const express = require('express')
 const User = require('../models/User')
 const router = express.Router()
@@ -276,14 +300,14 @@ module.exports = router;
 
 Now if we check our route at `localhost:3001/api/users` we should see that we get a JSON object back.  We are able to get this JSON object by using `res.json` instead of `.render` or `.send`.
 
-We can now retrieve the user that we created in our seeds.  This gives us enough to get started on building the UI for out idea-board.
+We can now retrieve the user that we created in our seeds.  This gives us enough to get started on building the UI for our idea-board.
 We will need to build more routes later in the app, but this will work for the moment. (YAGNI!)
 
 > COMMIT
 > DEPLOY
 
 ### Scaffolding out our Idea Page UI.
-For the UI of our game, lets get started by building out a client side router using `react-router`. We'll also install our other dependencies
+For the UI, lets get started by building out a client side router using `react-router`. We'll also install our other dependencies
 
 ```bash
 # inside of client directory
@@ -297,8 +321,9 @@ To start, our app will have 3 separate views:
 Within our `components` folder, we will go ahead and create a basic component for each route.  Once these are created, we can add React Router to the `App.js` component.
 
 ```jsx
+// In ./client/src/App.js
 import React, { Component } from 'react'
-import { BrowserRouter as Router, Route, Switch, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom'
 import styled from 'styled-components'
 import HomePage from './components/HomePage'
 import LogInPage from './components/LogInPage'
@@ -309,9 +334,6 @@ class App extends Component {
     return (
       <Router>
         <div>
-          <div>
-            <Link to='/login'>Login</Link>
-          </div>
           <Switch>
             <Route exact path="/" component={HomePage}/>
             <Route path="/login" component={LogInPage}/>
@@ -339,22 +361,22 @@ The first thing we'll focus on in the UI is the page users will see when they fi
 ## You Do 
 Create the home page element with a greeting and a `Link` to the LogIn component.  Make sure to also add a `Link` back to home on LogIn
 
-## LogIn
+## LogInPage
 
 In order to make API calls, we'll use Axios.
 
 ```jsx
 import React, { Component } from 'react'
-import { Redirect } from 'react-router-dom'
+import { Redirect, Link } from 'react-router-dom'
 import axios from 'axios'
 
-class LogIn extends Component {
+class LogInPage extends Component {
   state = {
     users: []
   }
 
   getAllUsers = () => {
-    axios.get('localhost:3001/api/users').then(res => {
+    axios.get('/api/users').then(res => {
       this.setState({users: res.data})
     })
   }
@@ -363,6 +385,8 @@ class LogIn extends Component {
     return (
       <div>
         <h1>Log-In</h1>
+        <Link to="/">Go Back to Home</Link>
+
         <h3>Please Select an Existing User</h3>
         {this.state.users.map(user => {
           return (<Link to={`/user/${user._id}`}>{user.userName}</Link>)
@@ -372,13 +396,13 @@ class LogIn extends Component {
   }
 }
 
-export default LogIn
+export default LogInPage
 ```
 
 Unfortunately, when we load our UI we get an error!
 
 ```text
-XMLHttpRequest cannot load localhost:3001/api/game. Cross origin requests are only supported for protocol schemes: http, data, chrome, chrome-extension, https.
+Access to XMLHttpRequest at 'http://localhost:3001/api/users' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
 This is an example of what's commonly referred to as a CORS error (Cross-Origin Resource Sharing)
@@ -402,17 +426,21 @@ There are several ways that we can handle CORS requests, but for our app we are 
 Now that we can communicate between the server and client, let's expand our UserController and give it the ability to `post` a new User.
 
 ```js
+  // In ./controllers/userController.js
   router.post('/', (req, res) => {
     const newUser = new User(req.body.user)
     newUser.save().then((user) => {
       res.json(user)
-    }).catch(console.log)
+    }).catch((err) => console.log(err))
   })
 ```
 
 Now we are able to add a Sign-Up form to the LogIn page.
 
-```js
+```jsx
+  // In ./client/src/components/LogInPage.js
+  ...
+
   createUser = () => {
     axios.post('/api/users', {
       user: this.state.user
@@ -431,19 +459,20 @@ Now we are able to add a Sign-Up form to the LogIn page.
     e.preventDefault()
     this.createUser()
   }
-...
+
+  ...
   <h1>Sign-Up</h1>
   <form onSubmit={this.handleSignUp}>
     <div>
       <label htmlFor="userName">User Name</label>
-      <input onChange={this.handleChange} name="userName" type="text" value={this.state.userName}/>
+      <input onChange={this.handleChange} name="userName" type="text" value={this.state.userName} />
     </div>
     <div>
       <label htmlFor="password">Password</label>
-      <input onChange={this.handleChange} name="password" type="text" value={this.state.password}/>
+      <input onChange={this.handleChange} name="password" type="text" value={this.state.password} />
     </div>
-  <button>Sign Up</button>
-</form>
+    <button>Sign Up</button>
+  </form>
 ```
 
 Finally we need to create a conditional that will handle a redirect after a user is successfully saved.
@@ -452,14 +481,15 @@ Finally we need to create a conditional that will handle a redirect after a user
 
 ## Building A Static Idea Board
 
-Now that we are able to navigate to the `IdeaView` page, we can now focus on building out some static views.  Let's mock some data in the initial state and write some starter JSX.
+Now that we are able to navigate to the `IdeaPage` page, we can now focus on building out some static views.  Let's mock some data in the initial state and write some starter JSX.
 
 ```jsx
+// In ./client/src/components/IdeaPage.js
 import React, { Component } from 'react'
 import axios from 'axios'
 import styled from 'styled-components'
 
-class IdeaView extends Component {
+class IdeaPage extends Component {
   state = {
     user: {
       userName: 'Bob'
@@ -506,7 +536,7 @@ class IdeaView extends Component {
   }
 }
 
-export default IdeaView
+export default IdeaPage
 ```
 
 ## You Do
@@ -519,24 +549,26 @@ Now that we have the static starter code, let's clean things up and add some sty
 
 ## Bringing in User Info
 
-We now have complete static code that is styled and living in small components with props being passed down from the `IdeaView`.  Now we need to connect the info from our API to the state.
+We now have complete static code that is styled and living in small components with props being passed down from the `IdeaPage`.  Now we need to connect the info from our API to the state.
 
 Since we are using React Router to create a route that matches `/user/:userId` we can take advantage of props that are being passed from the library in the form of `props.match.params.userId`.  Let's tell React to call our API if the props are passed down correctly.
 
 ```js
-  router.get('/:id', (req, res) => {
-    User.findById(req.params.id).then((user) => {
+  // In ./controllers/userController.js
+  router.get('/:userId', (req, res) => {
+    User.findById(req.params.userId).then((user) => {
       user.ideas = user.ideas.reverse()
       res.json(user)
-    }).catch(console.log)
+    }).catch((err) => console.log(err))
   })
 ```
 
 **Why did we call `.reverse`? This means that our response from the api will show our newest ideas first**
 
 ```js
+// In ./client/src/components/IdeaPage.js
 ...
-  componentWillMount () {
+  componentDidMount () {
     if (this.props.match.params) {
       const { userId } = this.props.match.params
       axios.get(`/api/users/${userId}`).then(res => {
@@ -563,8 +595,8 @@ As long as our props are being passed down properly, we should now see info comi
 Next up, let's add a click event to the `New Post` button.
 
 ```js
-//IdeaController
-router.post('/', (req, res) => {
+// In ./controllers/userController.js
+router.post('/:userId/ideas', (req, res) => {
   User.findById(req.params.userId).then((user) => {
     const newIdea = new Idea({})
     user.ideas.push(newIdea)
@@ -576,8 +608,9 @@ router.post('/', (req, res) => {
 ```
 
 ```js
+  // In ./client/src/components/IdeaPage.js
   createIdea = () => {
-    axios.post(`/api/users/${this.state.user.id}/ideas`).then(res => {
+    axios.post(`/api/users/${this.state.user._id}/ideas`).then(res => {
       const newIdeas = [...this.state.ideas]
       newIdeas.unshift(res.data) //This will add the new Idea to the beginning of the array
       this.setState({ideas: newIdeas})
@@ -588,12 +621,15 @@ router.post('/', (req, res) => {
 ```
 
 ## You Do
-We will write similar code to delete an idea.  Work with the student's around you to write an Express route, create a custom method, and pass it down through props.
+We will write similar code to delete an idea.  Work with the developers around you to write an Express route, create a custom method, and pass it down through props.
 
 Hint: You will need one argument
 
 ```js
-  deleteIdea = (idea) => {//Your code here}
+  // In ./client/src/components/IdeaPage.js
+  deleteIdea = (idea) => {
+    //Your code here
+  }
 ```
 
 > COMMIT
@@ -604,6 +640,7 @@ We can create empty ideas and delete those ideas, now we have the task of updati
 Let's focus on creating a handleChange event to update our local state.
 
 ```js
+// In ./client/src/components/IdeaPage.js
 ...
   //We need to pass in multiple arguments here.  The first is the object of the specific idea that is being changed.
   //And the event object is the special event listener object that has information about the value and name 
@@ -626,22 +663,29 @@ Let's focus on creating a handleChange event to update our local state.
 ```
 
 ```js
-<input onChange={(e) => handleChange(idea, e)}
-  type="text" name="title" value={idea.title}/>
+// In your single idea component
+  <input
+    onChange={(e) => handleChange(idea, e)}
+    type="text"
+    name="title"
+    value={idea.title}
+  />
 ```
 
 ## Triggering an Update
 
 The final step in our app is to create the ability to update an idea.
 
-First, we'll add a route to the IdeasController
+First, we'll add a route to the userController
 
 ```js
-// /api/user/:userId/ideas/:id
-router.patch('/:id', (req, res) => {
+// In ./controllers/userController.js
+...
+
+router.patch('/:userId/ideas/:ideaId', (req, res) => {
   User.findById(req.params.userId).then((user) => {
     const update = req.body.idea
-    const idea = user.ideas.id(req.params.id)
+    const idea = user.ideas.id(req.params.ideaId)
     if (update.title) {
       idea.title = update.title
     }
@@ -654,13 +698,16 @@ router.patch('/:id', (req, res) => {
     })
   })
 })
+
+...
 ```
 
 Next, we will add a method that will trigger the patch and update the local state. This will look pretty similar to our last method.
 
 ```js
+  // In ./client/src/components/IdeaPage.js
   updateIdea = (idea, e) => {
-    axios.patch(`/api/users/${this.state.user.id}/ideas/${idea._id}`, {idea}).then(res => {
+    axios.patch(`/api/users/${this.state.user._id}/ideas/${idea._id}`, {idea}).then(res => {
       this.setState({ideas: res.data.ideas})
     })
   }
